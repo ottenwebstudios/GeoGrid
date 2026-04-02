@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GeoGrid</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<link rel="stylesheet" href="css/shared.css">
+<link rel="stylesheet" href="css/auth.css">
+<link rel="stylesheet" href="css/lobby.css">
+<link rel="stylesheet" href="css/game.css">
+
+<!-- Firebase SDKs (compat mode for simplicity) -->
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="js/firebase-config.js"></script>
+<script src="js/utils.js"></script>
+</head>
+<body>
+
+<canvas id="bgc"></canvas>
+<div class="toast" id="toast"></div>
+
+<!-- ════════════════════════════
+     AUTH PAGE
+════════════════════════════ -->
+<div class="page show" id="pgAuth">
+  <div class="auth-card">
+    <div class="auth-logo">Geo<em>Grid</em></div>
+    <div class="auth-sub">Compete. Explore. Conquer.</div>
+    <div class="auth-tabs">
+      <div class="auth-tab on" data-panel="panLogin">Sign In</div>
+      <div class="auth-tab" data-panel="panRegister">Create Account</div>
+    </div>
+
+    <!-- Login -->
+    <div class="auth-panel on" id="panLogin">
+      <div class="auth-err" id="loginErr"></div>
+      <div class="field"><label>Email</label><input type="email" id="loginEmail" placeholder="you@example.com" autocomplete="email"/></div>
+      <div class="field"><label>Password</label><input type="password" id="loginPass" placeholder="••••••••" autocomplete="current-password"/></div>
+      <button class="btn btn-accent" id="btnLogin" style="width:100%;margin-top:4px;">Sign In</button>
+    </div>
+
+    <!-- Register -->
+    <div class="auth-panel" id="panRegister">
+      <div class="auth-err" id="regErr"></div>
+      <div class="field"><label>Username</label><input type="text" id="regUsername" placeholder="YOUR_NAME (letters, numbers, _)" maxlength="18" autocomplete="off"/></div>
+      <div class="field"><label>Email</label><input type="email" id="regEmail" placeholder="you@example.com" autocomplete="email"/></div>
+      <div class="field"><label>Password</label><input type="password" id="regPass" placeholder="Min. 6 characters" autocomplete="new-password"/></div>
+      <button class="btn btn-accent" id="btnRegister" style="width:100%;margin-top:4px;">Create Account</button>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════
+     LOBBY PAGE
+════════════════════════════ -->
+<div class="page" id="pgLobby">
+  <header class="lhdr">
+    <span class="logo">Geo<em>Grid</em></span>
+    <span class="season-tag">Season 4</span>
+    <div class="hdr-r">
+      <div class="trophy-hdr">
+        <svg viewBox="0 0 16 16" fill="currentColor"><path d="M3 2h10v6a5 5 0 01-10 0V2zm-2 1h2v4a7 7 0 002 4.9V13H4v1h8v-1h-1V11.9A7 7 0 0013 7V3h2V2h-2V1H3v1H1v1z"/></svg>
+        <span id="headerTrophies">100</span>
+      </div>
+      <div class="hsp"></div>
+      <div class="pp" id="profilePill">
+        <div class="pava" id="profileAva"></div>
+        <div><div class="pnm" id="profileName">—</div><div class="plv" id="profileLevel">Lv 1</div></div>
+      </div>
+      <button class="btn btn-ghost" onclick="signOut()" style="padding:5px 12px;font-size:10px;">Sign Out</button>
+    </div>
+  </header>
+
+  <aside class="lnav">
+    <div class="ng">
+      <div class="nl">Play</div>
+      <div class="ni on" onclick="selNav(this)"><div class="nd"></div>Play</div>
+      <div class="ni" onclick="selNav(this)"><div class="nd"></div>Party</div>
+    </div>
+    <div class="ng" style="border-top:1px solid var(--bd);padding-top:12px;">
+      <div class="nl">Progress</div>
+      <div class="ni" onclick="selNav(this)"><div class="nd"></div>Battle Pass<span class="nbg">!</span></div>
+      <div class="ni" onclick="selNav(this)"><div class="nd"></div>Challenges<span class="nbg">3</span></div>
+      <div class="ni" onclick="selNav(this)"><div class="nd"></div>Stats</div>
+    </div>
+    <div class="ng" style="border-top:1px solid var(--bd);padding-top:12px;">
+      <div class="nl">Store</div>
+      <div class="ni" onclick="selNav(this)"><div class="nd"></div>Shop<span class="nbg">2</span></div>
+      <div class="ni" onclick="selNav(this)"><div class="nd"></div>Rewards</div>
+    </div>
+    <div class="xpw">
+      <div class="xpr"><span class="xpl">Season XP</span><span class="xpv" id="xpLabel">0%</span></div>
+      <div class="xpt"><div class="xpf" id="xpBar" style="width:0%"></div></div>
+    </div>
+  </aside>
+
+  <!-- CENTER: MODE SELECTOR -->
+  <div class="lctr">
+    <div class="mcats">
+      <div class="mcat on"  data-cat="casual"   onclick="switchCat(this,'casual')">Casual</div>
+      <div class="mcat"     data-cat="ranked"   onclick="switchCat(this,'ranked')">Ranked</div>
+      <div class="mcat"     data-cat="custom"   onclick="switchCat(this,'custom')">Custom</div>
+      <div class="mcat"     data-cat="training" onclick="switchCat(this,'training')">Training</div>
+    </div>
+    <div class="mscroll" id="modeScroll"></div>
+    <div class="pbar">
+      <div class="pbar-info">
+        <div class="pbar-lbl">Selected Mode</div>
+        <div class="pbar-name" id="playBarName">Classic 1v1</div>
+      </div>
+      <div class="pbar-r">
+        <div class="pbar-sub"><div class="psdot"></div><span id="onlineCount">…</span><span style="font-family:'DM Mono',monospace">~0:34</span></div>
+        <button class="btn btn-accent lg" onclick="startMatchmaking()">Play Now</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- RIGHT PANEL -->
+  <aside class="lrt">
+    <div class="rts">
+      <div class="rt on" onclick="selTab(this,'tFriends')">Friends</div>
+      <div class="rt" onclick="selTab(this,'tNews')">News</div>
+    </div>
+    <div class="rb">
+      <div class="tp on" id="tFriends">
+        <div class="add-friend-row">
+          <input type="text" id="addFriendInput" placeholder="Add by username…" maxlength="18"/>
+          <button class="add-friend-btn" onclick="FriendsModule.addFriend()">Add</button>
+        </div>
+        <div id="friendRequests"></div>
+        <div class="fdv">Friends</div>
+        <div id="friendList"><div style="padding:12px 14px;font-size:11px;color:var(--sub);">Loading…</div></div>
+      </div>
+      <div class="tp" id="tNews">
+        <div class="nwi"><div class="ntg ev">Event</div><div class="ntt">Season 4 Map Pack — 200 Locations</div><div class="ndt">Today</div></div>
+        <div class="nwi"><div class="ntg up">Update</div><div class="ntt">Patch 4.6 — Scoring &amp; Balance</div><div class="ndt">2 days ago</div></div>
+        <div class="nwi"><div class="ntg">Season</div><div class="ntt">Season 4 Battle Pass Now Live</div><div class="ndt">1 week ago</div></div>
+        <div class="nwi"><div class="ntg up">Update</div><div class="ntt">New Mode: Sprint — Race the Clock</div><div class="ndt">2 weeks ago</div></div>
+      </div>
+    </div>
+  </aside>
+</div>
+
+<!-- ════════════════════════════
+     GAME PAGE
+════════════════════════════ -->
+<div class="page" id="pgGame">
+  <div class="ghud">
+    <span class="glogo">Geo<em>Grid</em></span>
+    <span class="grd" id="gRnd">Round 1 of 5</span>
+    <div class="gtmr" id="gTmr">120</div>
+  </div>
+  <div class="gstrip" id="gStrip"></div>
+
+  <!-- Team sidebar (hidden for 1v1) -->
+  <div class="team-bar hidden" id="teamBar"></div>
+
+  <div id="satMap"></div>
+
+  <div class="gp" id="gPanel">
+    <div class="gph">
+      <span class="gpt">Place Your Guess</span>
+      <button class="gpx" id="gpXBtn" onclick="GameModule.toggleGP()">Expand</button>
+    </div>
+    <div id="gmap"></div>
+    <div class="gpf">
+      <div class="gphint" id="gpHint">Click the map to pin your guess</div>
+      <button class="bgss" id="bGss" onclick="GameModule.submitGuess()">Confirm Guess</button>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════
+     MATCHMAKING OVERLAY
+════════════════════════════ -->
+<div class="ov" id="ovMM">
+  <div class="mm-wrap">
+    <div class="mm-logo">Geo<em>Grid</em></div>
+    <div class="mm-title">Finding match</div>
+    <div class="mm-dots"><div class="mm-dot"></div><div class="mm-dot"></div><div class="mm-dot"></div></div>
+    <div class="mm-players" id="mmPs"></div>
+    <div class="mm-timer" id="mmTimerDisplay">0s</div>
+    <div class="mm-status" id="mmSt">Searching for players…</div>
+    <button class="btn btn-danger" onclick="MatchmakingModule.cancel()">Cancel</button>
+  </div>
+</div>
+
+<!-- ════════════════════════════
+     RESULTS OVERLAY
+════════════════════════════ -->
+<div class="ov" id="ovResults">
+  <div class="ri">
+    <div class="rih"><span class="rit">Round Results</span><span class="rir" id="rRnd">Round 1 of 5</span></div>
+    <div id="rmap"></div>
+    <div class="rsc" id="rScores"></div>
+    <div class="rif"><div class="rifl" id="rTot"></div><button class="btn btn-accent" id="bNxt" onclick="GameModule.nextRound()">Next Round</button></div>
+  </div>
+</div>
+
+<!-- ════════════════════════════
+     CINEMA OVERLAY
+════════════════════════════ -->
+<div id="ovCinema">
+  <canvas id="cinBg"></canvas>
+  <div class="cin-inner" id="cinInner"></div>
+  <div class="cin-bar"><div class="cin-bar-fill" id="cinFill"></div></div>
+</div>
+
+<!-- ════════════════════════════
+     APP SCRIPTS
+════════════════════════════ -->
+<script src="js/auth.js"></script>
+<script src="js/friends.js"></script>
+<script src="js/lobby.js"></script>
+<script src="js/matchmaking.js"></script>
+<script src="js/game.js"></script>
+<script>
+/* ═══════════════════════════════════════
+   APP CORE — wires auth state → pages
+═══════════════════════════════════════ */
+window.APP = {
+  uid: null,
+  userData: null,
+  selectedMode: null
+};
+
+/* ── lobby bg blobs ── */
+(function(){
+  var cv = document.getElementById('bgc');
+  blobAnim(cv, ['200,195,255','210,205,255','222,218,255','195,200,255'], .14, '#f9f9fb');
+  window.addEventListener('resize', function(){
+    cv.width=innerWidth; cv.height=innerHeight;
+  });
+})();
+
+/* ── page router ── */
+function showPage(id) {
+  document.querySelectorAll('.page').forEach(function(p){ p.classList.remove('show'); });
+  document.getElementById(id).classList.add('show');
+}
+
+/* ── auth state ── */
+var _heartbeatInterval = null;
+
+auth.onAuthStateChanged(function(user) {
+  if (user) {
+    window.APP.uid = user.uid;
+    // Fetch user profile
+    db.collection('users').doc(user.uid).get().then(function(snap) {
+      if (!snap.exists) { auth.signOut(); return; }
+      var data = snap.data();
+      data.uid = user.uid;
+      window.APP.userData = data;
+      updateLobbyHeader(data);
+      FriendsModule.init(user.uid, data);
+      LobbyModule.init();
+      // Set online
+      db.collection('users').doc(user.uid).update({
+        lastSeen: firebase.firestore.FieldValue.serverTimestamp(),
+        inGame: false
+      }).catch(function(){});
+      // Heartbeat every 90s
+      clearInterval(_heartbeatInterval);
+      _heartbeatInterval = setInterval(function(){ FriendsModule.heartbeat(); }, 90000);
+      showPage('pgLobby');
+      trackOnlineCount();
+    }).catch(function(e) { console.error(e); });
+  } else {
+    window.APP.uid = null;
+    window.APP.userData = null;
+    clearInterval(_heartbeatInterval);
+    FriendsModule.destroy();
+    showPage('pgAuth');
+  }
+});
+
+function updateLobbyHeader(d) {
+  var pnEl  = document.getElementById('profileName');
+  var pvEl  = document.getElementById('profileLevel');
+  var paEl  = document.getElementById('profileAva');
+  var trEl  = document.getElementById('headerTrophies');
+  var xpEl  = document.getElementById('xpLabel');
+  var xpBar = document.getElementById('xpBar');
+  if (pnEl) pnEl.textContent = d.username || '—';
+  if (pvEl) pvEl.textContent = 'Lv ' + (d.level||1) + ' · ' + getRank(d.trophies||0).name;
+  if (paEl) paEl.style.background = d.ava || 'var(--ac)';
+  if (trEl) trEl.textContent = (d.trophies||0).toLocaleString();
+  if (xpEl && xpBar) {
+    var xpPct = Math.min(100, Math.round(((d.xp||0) % 1000) / 10));
+    xpEl.textContent = xpPct + '%';
+    xpBar.style.width = xpPct + '%';
+  }
+}
+
+function signOut() {
+  clearInterval(_heartbeatInterval);
+  if (window.APP.uid) {
+    db.collection('users').doc(window.APP.uid).update({ lastSeen: firebase.firestore.FieldValue.serverTimestamp() }).catch(function(){});
+  }
+  auth.signOut();
+}
+
+/* ── track online count roughly ── */
+function trackOnlineCount() {
+  var cutoff = new Date(Date.now() - 3 * 60 * 1000);
+  db.collection('users')
+    .where('lastSeen', '>', cutoff)
+    .get().then(function(snap) {
+      var el = document.getElementById('onlineCount');
+      if (el) el.textContent = snap.size + ' online';
+    }).catch(function(){});
+}
+
+/* ── lobby helpers ── */
+function selNav(el) {
+  document.querySelectorAll('.ni').forEach(function(n){ n.classList.remove('on'); });
+  el.classList.add('on');
+}
+function selTab(el, id) {
+  document.querySelectorAll('.rt').forEach(function(t){ t.classList.remove('on'); });
+  document.querySelectorAll('.tp').forEach(function(p){ p.classList.remove('on'); });
+  el.classList.add('on');
+  document.getElementById(id).classList.add('on');
+}
+function switchCat(el, cat) {
+  document.querySelectorAll('.mcat').forEach(function(c){ c.classList.remove('on'); });
+  el.classList.add('on');
+  LobbyModule.renderModes(cat);
+  LobbyModule.currentCat = cat;
+}
+
+/* ── start matchmaking ── */
+function startMatchmaking() {
+  if (!window.APP.uid || !window.APP.userData) {
+    showToast('Not logged in.'); return;
+  }
+  var mode = LobbyModule.getSelectedMode();
+  var customOpts = LobbyModule.getCustomOpts();
+  // Mark in game
+  db.collection('users').doc(window.APP.uid).update({ inGame: true, lastSeen: firebase.firestore.FieldValue.serverTimestamp() }).catch(function(){});
+
+  MatchmakingModule.start(
+    window.APP.uid,
+    window.APP.userData,
+    mode,
+    customOpts,
+    function(players, matchId) {
+      // Hide MM overlay
+      document.getElementById('ovMM').classList.remove('show');
+      // Apply custom overrides to mode
+      var resolvedMode = Object.assign({}, mode);
+      if (mode.isCustomBuilder) {
+        resolvedMode.teamSize    = customOpts.teamSize;
+        resolvedMode.rounds      = customOpts.rounds;
+        resolvedMode.timer       = customOpts.timer;
+        resolvedMode.streetNames = customOpts.streetNames;
+        resolvedMode.name        = 'Custom Game';
+      }
+      // Show intro cinema then start game
+      showIntroCinema(players, resolvedMode.name, function() {
+        GameModule.start(players, resolvedMode, matchId);
+      });
+    }
+  );
+}
+</script>
+</body>
+</html>
