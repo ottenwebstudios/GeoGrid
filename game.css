@@ -1,0 +1,49 @@
+/* ─── GAME HUD ─── */
+.ghud{position:absolute;top:0;left:0;right:0;height:52px;z-index:200;display:flex;align-items:center;padding:0 18px;gap:14px;background:rgba(255,255,255,.93);backdrop-filter:blur(14px);border-bottom:1px solid var(--bd);}
+.glogo{font-family:'DM Mono',monospace;font-size:14px;font-weight:500;letter-spacing:.07em;}
+.glogo em{color:var(--ac);font-style:normal;}
+.grd{font-size:11px;color:var(--sub);letter-spacing:.08em;text-transform:uppercase;}
+.gtmr{margin-left:auto;font-family:'DM Mono',monospace;font-size:22px;font-weight:500;min-width:48px;text-align:right;transition:color .3s;}
+.gtmr.warn{color:var(--or);}.gtmr.danger{color:var(--rd);}
+
+/* ─── PLAYER STRIP ─── */
+.gstrip{position:absolute;top:52px;left:0;right:0;z-index:199;display:flex;align-items:center;padding:6px 18px;gap:16px;background:rgba(255,255,255,.9);backdrop-filter:blur(10px);border-bottom:1px solid var(--bd);overflow-x:auto;scrollbar-width:none;}
+.gstrip::-webkit-scrollbar{display:none;}
+.spp{display:flex;align-items:center;gap:7px;flex-shrink:0;}
+.spav{width:22px;height:22px;flex-shrink:0;}
+.spn{font-size:12px;font-weight:500;}
+.sps{font-size:10px;color:var(--sub);}
+.sps.ok{color:var(--gn);}
+.spsep{width:1px;height:20px;background:var(--bd);flex-shrink:0;}
+
+/* ─── SAT MAP ─── */
+#satMap{position:absolute;top:92px;left:0;right:0;bottom:0;z-index:10;}
+
+/* ─── GUESS PANEL ─── */
+.gp{position:absolute;bottom:18px;right:18px;z-index:300;width:256px;background:rgba(255,255,255,.96);backdrop-filter:blur(16px);border:1px solid var(--bd);transition:width .35s cubic-bezier(.22,1,.36,1);}
+.gp.big{width:380px;}
+.gph{display:flex;align-items:center;justify-content:space-between;padding:10px 12px;border-bottom:1px solid var(--bd);}
+.gpt{font-size:10px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--sub);}
+.gpx{font-size:10px;font-weight:500;color:var(--ac);cursor:pointer;background:none;border:none;font-family:'DM Sans',sans-serif;letter-spacing:.06em;text-transform:uppercase;}
+#gmap{height:178px;transition:height .35s cubic-bezier(.22,1,.36,1);}
+.gp.big #gmap{height:276px;}
+.gpf{padding:9px 12px;display:flex;flex-direction:column;gap:6px;}
+.gphint{font-size:10px;color:var(--sub);text-align:center;}
+.bgss{width:100%;padding:11px;background:var(--ac);color:#fff;border:none;font-family:'DM Sans',sans-serif;font-size:12px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;cursor:pointer;opacity:.4;pointer-events:none;transition:background .15s,opacity .2s;}
+.bgss.rdy{opacity:1;pointer-events:all;}
+.bgss.rdy:hover{background:#6a5ef0;}
+
+/* ─── TEAM SCORE SIDEBAR (for 2v2+) ─── */
+.team-bar{position:absolute;top:92px;left:0;bottom:0;width:200px;z-index:50;background:rgba(255,255,255,.88);backdrop-filter:blur(12px);border-right:1px solid var(--bd);display:flex;flex-direction:column;padding:12px;}
+.team-bar.hidden{display:none;}
+.team-title{font-size:9px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;color:var(--sub);margin-bottom:10px;}
+.team-block{margin-bottom:12px;padding:10px;border:1px solid var(--bd);background:var(--sf);}
+.team-name{font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;margin-bottom:7px;}
+.team-member{display:flex;align-items:center;gap:7px;margin-bottom:4px;}
+.team-mav{width:18px;height:18px;flex-shrink:0;}
+.team-mn{font-size:11px;font-weight:500;}
+.team-ms{font-size:10px;color:var(--sub);}
+.team-ms.ok{color:var(--gn);}
+.team-pts{font-family:'DM Mono',monospace;font-size:20px;font-weight:500;color:var(--ac);margin-top:6px;}
+/* shift satMap when team bar visible */
+#satMap.team-offset{left:200px;}
