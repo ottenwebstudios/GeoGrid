@@ -246,35 +246,54 @@ function showPage(id) {
 
 /* ── auth state ── */
 var _heartbeatInterval = null;
+window._registering = false; // set true during registration batch write
+
+/* enterLobby — called by both onAuthStateChanged and register completion */
+window.APP.enterLobby = function(uid) {
+  db.collection('users').doc(uid).get().then(function(snap) {
+    if (!snap.exists) {
+      // Doc not written yet — retry once after short delay
+      setTimeout(function(){ window.APP.enterLobby(uid); }, 800);
+      return;
+    }
+    var data = snap.data();
+    data.uid = uid;
+    window.APP.uid = uid;
+    window.APP.userData = data;
+    updateLobbyHeader(data);
+
+    // Mark online (use set merge so it works on brand-new docs too)
+    db.collection('users').doc(uid).set({
+      lastSeen: firebase.firestore.FieldValue.serverTimestamp(),
+      inGame: false
+    }, { merge: true }).catch(function(){});
+
+    // Init modules
+    FriendsModule.init(uid, data);
+    LobbyModule.init();
+
+    // Heartbeat every 90s
+    clearInterval(_heartbeatInterval);
+    _heartbeatInterval = setInterval(function(){ FriendsModule.heartbeat(); }, 90000);
+
+    showPage('pgLobby');
+    trackOnlineCount();
+  }).catch(function(e) {
+    console.error('enterLobby error:', e);
+    showToast('Error loading profile — please refresh.');
+  });
+};
 
 auth.onAuthStateChanged(function(user) {
   if (user) {
-    window.APP.uid = user.uid;
-    // Fetch user profile
-    db.collection('users').doc(user.uid).get().then(function(snap) {
-      if (!snap.exists) { auth.signOut(); return; }
-      var data = snap.data();
-      data.uid = user.uid;
-      window.APP.userData = data;
-      updateLobbyHeader(data);
-      FriendsModule.init(user.uid, data);
-      LobbyModule.init();
-      // Set online
-      db.collection('users').doc(user.uid).update({
-        lastSeen: firebase.firestore.FieldValue.serverTimestamp(),
-        inGame: false
-      }).catch(function(){});
-      // Heartbeat every 90s
-      clearInterval(_heartbeatInterval);
-      _heartbeatInterval = setInterval(function(){ FriendsModule.heartbeat(); }, 90000);
-      showPage('pgLobby');
-      trackOnlineCount();
-    }).catch(function(e) { console.error(e); });
+    // If registration batch is still writing, auth.js will call enterLobby manually
+    if (window._registering) return;
+    window.APP.enterLobby(user.uid);
   } else {
     window.APP.uid = null;
     window.APP.userData = null;
     clearInterval(_heartbeatInterval);
-    FriendsModule.destroy();
+    if (window.FriendsModule) FriendsModule.destroy();
     showPage('pgAuth');
   }
 });
