@@ -20,3 +20,38 @@
 .auth-footer{margin-top:6px;font-size:11px;color:var(--sub);text-align:center;}
 .auth-err{padding:10px 14px;background:rgba(224,80,80,.08);border:1px solid rgba(224,80,80,.25);color:var(--rd);font-size:12px;display:none;}
 .auth-err.show{display:block;}
+
+/* ─── GUEST BUTTON ─── */
+.auth-divider{
+  display:flex;align-items:center;gap:10px;
+  margin:18px 0 14px;color:var(--sub);font-size:11px;
+}
+.auth-divider::before,.auth-divider::after{
+  content:'';flex:1;height:1px;background:var(--bd);
+}
+.btn-guest{
+  width:100%;padding:12px;
+  background:transparent;
+  border:1.5px solid var(--bd2);
+  color:var(--tx);
+  font-family:'DM Sans',sans-serif;
+  font-size:13px;font-weight:500;
+  letter-spacing:.04em;
+  cursor:pointer;
+  transition:border-color .15s,background .15s,color .15s;
+}
+.btn-guest:hover{
+  border-color:var(--ac);
+  background:var(--a2);
+  color:var(--ac);
+}
+.btn-guest:disabled{
+  opacity:.5;cursor:not-allowed;
+}
+.auth-guest-note{
+  text-align:center;
+  font-size:10px;
+  color:var(--sub);
+  margin-top:8px;
+  letter-spacing:.02em;
+}
