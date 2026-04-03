@@ -211,48 +211,56 @@
   <div class="cin-bar"><div class="cin-bar-fill" id="cinFill"></div></div>
 </div>
 
+
 <!-- ════════════════════════════
-     APP SCRIPTS
+     SCRIPTS — strict load order:
+     1. utils (no deps)
+     2. module files (depend on utils + window.APP)
+     3. inline APP bootstrap (defines window.APP, wires auth)
+     4. auth.js LAST (attaches click listeners, calls enterLobby)
 ════════════════════════════ -->
-<script src="js/auth.js"></script>
+
+<!-- utils has zero deps, load first -->
+<script src="js/utils.js"></script>
+
+<!-- Modules reference window.APP but only call it at runtime, not parse time -->
 <script src="js/friends.js"></script>
 <script src="js/lobby.js"></script>
 <script src="js/matchmaking.js"></script>
 <script src="js/game.js"></script>
+
 <script>
 /* ═══════════════════════════════════════
-   APP CORE — wires auth state → pages
+   APP BOOTSTRAP
+   Must run after all module scripts above.
+   auth.js (below) depends on window.APP.
 ═══════════════════════════════════════ */
 window.APP = {
   uid: null,
   userData: null,
   selectedMode: null
 };
+window._registering = false;
 
-/* ── lobby bg blobs ── */
+/* ── background blobs ── */
 (function(){
   var cv = document.getElementById('bgc');
   blobAnim(cv, ['200,195,255','210,205,255','222,218,255','195,200,255'], .14, '#f9f9fb');
-  window.addEventListener('resize', function(){
-    cv.width=innerWidth; cv.height=innerHeight;
-  });
+  window.addEventListener('resize', function(){ cv.width=innerWidth; cv.height=innerHeight; });
 })();
 
 /* ── page router ── */
 function showPage(id) {
   document.querySelectorAll('.page').forEach(function(p){ p.classList.remove('show'); });
-  document.getElementById(id).classList.add('show');
+  var el = document.getElementById(id);
+  if (el) el.classList.add('show');
 }
 
-/* ── auth state ── */
-var _heartbeatInterval = null;
-window._registering = false; // set true during registration batch write
-
-/* enterLobby — called by both onAuthStateChanged and register completion */
+/* ── enterLobby — shared entry point after auth ── */
 window.APP.enterLobby = function(uid) {
   db.collection('users').doc(uid).get().then(function(snap) {
     if (!snap.exists) {
-      // Doc not written yet — retry once after short delay
+      /* Doc not written yet (new registration) — retry in 800ms */
       setTimeout(function(){ window.APP.enterLobby(uid); }, 800);
       return;
     }
@@ -260,82 +268,81 @@ window.APP.enterLobby = function(uid) {
     data.uid = uid;
     window.APP.uid = uid;
     window.APP.userData = data;
+
     updateLobbyHeader(data);
 
-    // Mark online (use set merge so it works on brand-new docs too)
     db.collection('users').doc(uid).set({
       lastSeen: firebase.firestore.FieldValue.serverTimestamp(),
       inGame: false
     }, { merge: true }).catch(function(){});
 
-    // Init modules
     FriendsModule.init(uid, data);
     LobbyModule.init();
 
-    // Heartbeat every 90s
-    clearInterval(_heartbeatInterval);
-    _heartbeatInterval = setInterval(function(){ FriendsModule.heartbeat(); }, 90000);
+    clearInterval(window._heartbeat);
+    window._heartbeat = setInterval(function(){ FriendsModule.heartbeat(); }, 90000);
 
     showPage('pgLobby');
     trackOnlineCount();
   }).catch(function(e) {
     console.error('enterLobby error:', e);
-    showToast('Error loading profile — please refresh.');
+    showToast('Could not load your profile — please refresh.');
   });
 };
 
+/* ── auth state observer ── */
 auth.onAuthStateChanged(function(user) {
   if (user) {
-    // If registration batch is still writing, auth.js will call enterLobby manually
-    if (window._registering) return;
+    if (window._registering) return; /* registration batch still writing */
     window.APP.enterLobby(user.uid);
   } else {
     window.APP.uid = null;
     window.APP.userData = null;
-    clearInterval(_heartbeatInterval);
+    clearInterval(window._heartbeat);
     if (window.FriendsModule) FriendsModule.destroy();
     showPage('pgAuth');
   }
 });
 
+/* ── header updater ── */
 function updateLobbyHeader(d) {
-  var pnEl  = document.getElementById('profileName');
-  var pvEl  = document.getElementById('profileLevel');
-  var paEl  = document.getElementById('profileAva');
-  var trEl  = document.getElementById('headerTrophies');
-  var xpEl  = document.getElementById('xpLabel');
-  var xpBar = document.getElementById('xpBar');
-  if (pnEl) pnEl.textContent = d.username || '—';
-  if (pvEl) pvEl.textContent = 'Lv ' + (d.level||1) + ' · ' + getRank(d.trophies||0).name;
-  if (paEl) paEl.style.background = d.ava || 'var(--ac)';
-  if (trEl) trEl.textContent = (d.trophies||0).toLocaleString();
-  if (xpEl && xpBar) {
-    var xpPct = Math.min(100, Math.round(((d.xp||0) % 1000) / 10));
-    xpEl.textContent = xpPct + '%';
-    xpBar.style.width = xpPct + '%';
+  var nm  = document.getElementById('profileName');
+  var lv  = document.getElementById('profileLevel');
+  var av  = document.getElementById('profileAva');
+  var tr  = document.getElementById('headerTrophies');
+  var xpl = document.getElementById('xpLabel');
+  var xpb = document.getElementById('xpBar');
+  if (nm)  nm.textContent  = d.username || '—';
+  if (lv)  lv.textContent  = 'Lv '+(d.level||1)+' · '+getRank(d.trophies||0).name;
+  if (av)  av.style.background = d.ava || 'var(--ac)';
+  if (tr)  tr.textContent  = (d.trophies||0).toLocaleString();
+  if (xpl && xpb) {
+    var pct = Math.min(100, Math.round(((d.xp||0) % 1000) / 10));
+    xpl.textContent = pct + '%';
+    xpb.style.width = pct + '%';
   }
 }
 
 function signOut() {
-  clearInterval(_heartbeatInterval);
+  clearInterval(window._heartbeat);
   if (window.APP.uid) {
-    db.collection('users').doc(window.APP.uid).update({ lastSeen: firebase.firestore.FieldValue.serverTimestamp() }).catch(function(){});
+    db.collection('users').doc(window.APP.uid)
+      .set({ lastSeen: firebase.firestore.FieldValue.serverTimestamp() }, { merge: true })
+      .catch(function(){});
   }
   auth.signOut();
 }
 
-/* ── track online count roughly ── */
 function trackOnlineCount() {
   var cutoff = new Date(Date.now() - 3 * 60 * 1000);
-  db.collection('users')
-    .where('lastSeen', '>', cutoff)
-    .get().then(function(snap) {
+  db.collection('users').where('lastSeen', '>', cutoff).get()
+    .then(function(snap) {
       var el = document.getElementById('onlineCount');
       if (el) el.textContent = snap.size + ' online';
     }).catch(function(){});
 }
 
-/* ── lobby helpers ── */
+/* ── lobby UI helpers ── */
 function selNav(el) {
   document.querySelectorAll('.ni').forEach(function(n){ n.classList.remove('on'); });
   el.classList.add('on');
@@ -355,23 +362,19 @@ function switchCat(el, cat) {
 
 /* ── start matchmaking ── */
 function startMatchmaking() {
-  if (!window.APP.uid || !window.APP.userData) {
-    showToast('Not logged in.'); return;
-  }
+  if (!window.APP.uid || !window.APP.userData) { showToast('Not logged in.'); return; }
   var mode = LobbyModule.getSelectedMode();
   var customOpts = LobbyModule.getCustomOpts();
-  // Mark in game
-  db.collection('users').doc(window.APP.uid).update({ inGame: true, lastSeen: firebase.firestore.FieldValue.serverTimestamp() }).catch(function(){});
+
+  db.collection('users').doc(window.APP.uid).set({
+    inGame: true,
+    lastSeen: firebase.firestore.FieldValue.serverTimestamp()
+  }, { merge: true }).catch(function(){});
 
   MatchmakingModule.start(
-    window.APP.uid,
-    window.APP.userData,
-    mode,
-    customOpts,
+    window.APP.uid, window.APP.userData, mode, customOpts,
     function(players, matchId) {
-      // Hide MM overlay
       document.getElementById('ovMM').classList.remove('show');
-      // Apply custom overrides to mode
       var resolvedMode = Object.assign({}, mode);
       if (mode.isCustomBuilder) {
         resolvedMode.teamSize    = customOpts.teamSize;
@@ -380,7 +383,6 @@ function startMatchmaking() {
         resolvedMode.streetNames = customOpts.streetNames;
         resolvedMode.name        = 'Custom Game';
       }
-      // Show intro cinema then start game
       showIntroCinema(players, resolvedMode.name, function() {
         GameModule.start(players, resolvedMode, matchId);
       });
@@ -388,5 +390,9 @@ function startMatchmaking() {
   );
 }
 </script>
+
+<!-- auth.js LAST — its IIFE attaches click listeners and calls window.APP.enterLobby -->
+<script src="js/auth.js"></script>
+
 </body>
 </html>
